@@ -104,7 +104,7 @@ func combat(c *gin.Context) {
 	}
 
 	p2 := userMAP[r.User.ID]
-	if p2.Status.UnderAttack && p2.Status.Timestamp+reactTime > time.Now().Unix() {
+	if p2.Status.UnderAttack && p2.Status.Timestamp+reactTime < time.Now().Unix() {
 		fmt.Println("---------------------------------------------")
 		p2.Status.UnderAttack = false
 		p2.Status.Timestamp = time.Now().Unix()
