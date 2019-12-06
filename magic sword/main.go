@@ -50,6 +50,7 @@ func main() {
 	r.GET("/v1/normal", normal)
 	r.GET("/v1/combat", combat)
 	r.GET("/v1/statics", getStats)
+	r.GET("/v1/restart", restart)
 	r.Run(":11000")
 }
 
@@ -142,6 +143,11 @@ func normal(c *gin.Context) {
 	}
 	// check if the device wants to start combat
 	if r.StartCombat {
+		if r.Target == r.User.ID {
+			r.Res = response{Code: 1, Message: "cannot target-self"}
+			c.JSON(200, r)
+			return
+		}
 		player, ok := userMAP[r.Target]
 		if ok {
 			player.Status.InCombat = true
@@ -204,4 +210,16 @@ func getStats(c *gin.Context) {
 		return
 	}
 	c.JSON(200, userMAP[r.User.ID])
+}
+
+func restart(c *gin.Context) {
+	for k := range userMAP {
+		delete(userMAP, k)
+	}
+
+	for k := range combactMAP {
+		delete(combactMAP, k)
+	}
+
+	c.JSON(200, response{Code: 1, Message: "clean done !!!!!"})
 }
