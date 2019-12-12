@@ -21,6 +21,7 @@ type status struct {
 	CombatTarget int32 `json:"combatTarget"`
 	NumWin       int   `json:"numWin"`
 	NumLose      int   `json:"numLose"`
+	Result       int   `json:"result"`
 }
 
 type player struct {
@@ -38,7 +39,7 @@ type request struct {
 	Res         response `json:"res"`
 }
 
-const reactTime int64 = 15
+const reactTime int64 = 2
 
 var userMAP map[int32]player
 var combactMAP map[string][]player
@@ -51,6 +52,7 @@ func main() {
 	r.GET("/v1/combat", combat)
 	r.GET("/v1/statics", getStats)
 	r.GET("/v1/restart", restart)
+	r.StaticFile("/", "./project_website/project_website/index.html")
 	r.Run(":11000")
 }
 
@@ -62,31 +64,46 @@ func combat(c *gin.Context) {
 		return
 	}
 	if r.Target == r.User.ID {
-		c.JSON(500, response{Message: "cannot target self"})
-		return
-	}
-
-	if !userMAP[r.Target].Status.InCombat {
-		c.JSON(500, response{Message: "target not in battle"})
+		r.Res = response{Message: "cannot target self"}
+		c.JSON(500, r)
 		return
 	}
 
 	if !userMAP[r.User.ID].Status.InCombat {
-		c.JSON(500, response{Message: "user not in battle"})
+		r.User = userMAP[r.User.ID]
+		r.Res = response{Message: "user not in battle"}
+		c.JSON(500, r)
+		return
+	}
+
+	if !userMAP[r.Target].Status.InCombat {
+		r.User = userMAP[r.User.ID]
+		r.Res = response{Message: "user not in battle"}
+		c.JSON(500, r)
 		return
 	}
 
 	if r.Damage > 0 {
-		p := userMAP[r.Target]
-		p.Status.UnderAttack = true
-		p.Status.Timestamp = time.Now().Unix()
-		p.Status.DamageAlert = p.Status.DamageAlert + r.Damage
-		userMAP[r.Target] = p
+		if r.Damage == 3 {
+			p := userMAP[r.Target]
+			p.Status.HP = p.Status.HP - 3
+			userMAP[r.Target] = p
+		} else {
+			p := userMAP[r.Target]
+			p.Status.UnderAttack = true
+			p.Status.Timestamp = time.Now().Unix()
+			// p.Status.DamageAlert = p.Status.DamageAlert + r.Damage
+			p.Status.DamageAlert = r.Damage
+			userMAP[r.Target] = p
+		}
+
 	} else if r.Damage < 0 {
 		p := userMAP[r.User.ID]
 		p.Status.UnderAttack = false
 		p.Status.Timestamp = time.Now().Unix()
-		p.Status.HP = p.Status.HP - (p.Status.DamageAlert + r.Damage)
+		if p.Status.DamageAlert > 0 {
+			p.Status.HP = p.Status.HP - (p.Status.DamageAlert + r.Damage)
+		}
 		p.Status.DamageAlert = 0
 		if p.Status.HP <= 0 {
 			p.Status.InCombat = false
@@ -197,6 +214,7 @@ func normal(c *gin.Context) {
 	r.User.Status.HP = 100
 	r.User.Status.UnderAttack = false
 	r.User.Status.InCombat = false
+	r.User.Status.Result = -1
 	userMAP[r.User.ID] = r.User
 	combactMAP[r.User.Geo] = updatedPlayers
 	c.JSON(200, updatedPlayers)
@@ -209,7 +227,13 @@ func getStats(c *gin.Context) {
 		c.JSON(500, request{Res: response{Code: 0, Message: "Cannot Parse Request"}})
 		return
 	}
-	c.JSON(200, userMAP[r.User.ID])
+	player, ok := userMAP[r.User.ID]
+	if ok {
+		c.JSON(200, player)
+	} else {
+		c.JSON(500, request{Res: response{Code: 0, Message: "Target not in map"}})
+	}
+
 }
 
 func restart(c *gin.Context) {
